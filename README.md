@@ -1,8 +1,8 @@
 # Agentic AI Platform
 
-A modular, observable task-execution platform built around explicit planning, tool routing, bounded execution, and evidence-backed results.
+A modular, observable task-execution platform built around LangGraph orchestration, explicit planning, validated tool routing, bounded execution, and evidence-backed results.
 
-> **Status:** MVP foundation in active development. The deterministic planner and local tools run without credentials; an optional OpenAI planner can be enabled with an API key.
+> **Status:** MVP foundation in active development. The LangGraph execution backend and deterministic planner run without credentials; an optional OpenAI planner can be enabled with an API key.
 
 ## Why this project?
 
@@ -16,13 +16,13 @@ This is not a chat UI with tools bolted on. It is an agent runtime with explicit
 ## Architecture
 
 ```text
-Client -> FastAPI -> Agent Runtime
+Client -> FastAPI -> LangGraph Runtime
                        |
-                 Planner interface
+                 Plan node
                        |
-                 Validated plan
+              Validated plan state
                        |
-                Tool registry
+             Execute-tool node
               /       |       \
           Calculator Search  Date/time
               \       |       /
@@ -63,6 +63,7 @@ curl -X POST http://127.0.0.1:8000/tasks \
 
 | Variable | Purpose | Default |
 |---|---|---|
+| `AGENT_RUNTIME_BACKEND` | `langgraph` or `legacy` | `langgraph` |
 | `AGENT_PLANNER` | `rules` or `openai` | `rules` |
 | `OPENAI_API_KEY` | Enables the optional OpenAI planner | unset |
 | `OPENAI_MODEL` | Model for planning | `gpt-4.1-mini` |
@@ -95,7 +96,7 @@ ruff check .
 - [x] Structured reflection events for tool failures
 - [x] FastAPI task endpoint
 - [x] Unit and API tests
-- [ ] LangGraph execution backend
+- [x] LangGraph execution backend with plan, tool, and finalize nodes
 - [ ] OpenAI tool-calling planner
 - [ ] Persistent task/trace storage
 - [ ] Authentication, rate limiting, and Docker deployment
