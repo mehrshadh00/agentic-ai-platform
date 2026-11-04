@@ -1,12 +1,17 @@
-from agentic_platform.models import Plan, ToolCall
+from agentic_platform.models import Plan, ToolCall, ToolResult
 from agentic_platform.runtime import AgentRuntime
 
 
 class FixedPlanner:
     def create_plan(self, task: str) -> Plan:
-        return Plan(steps=[
-            ToolCall(tool_name="calculator", arguments={"expression": "19 * 23"}),
-        ])
+        return Plan(
+            steps=[
+                ToolCall(
+                    tool_name="calculator",
+                    arguments={"expression": "19 * 23"},
+                )
+            ]
+        )
 
 
 class BrokenPlanner:
@@ -37,3 +42,31 @@ def test_runtime_records_tool_failure():
     result = AgentRuntime(planner=UnknownToolPlanner()).run("run an unknown tool")
     assert result.status == "failed"
     assert any(event.event == "tool.failed" for event in result.trace)
+    assert any(event.event == "tool.reflection" for event in result.trace)
+    assert not any(event.event == "tool.retry" for event in result.trace)
+
+
+def test_runtime_retries_transient_tool_failure():
+    runtime = AgentRuntime(planner=FixedPlanner())
+    original_execute = runtime.registry.execute
+    attempts = 0
+
+    def flaky_execute(name, arguments):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            return ToolResult(
+                tool_name=name,
+                success=False,
+                error="RuntimeError: temporary backend failure",
+            )
+        return original_execute(name, arguments)
+
+    runtime.registry.execute = flaky_execute
+    result = runtime.run("calculate 19 * 23")
+
+    assert attempts == 2
+    assert result.status == "partial"
+    assert result.steps_executed == 2
+    assert any(event.event == "tool.reflection" for event in result.trace)
+    assert any(event.event == "tool.retry" for event in result.trace)
