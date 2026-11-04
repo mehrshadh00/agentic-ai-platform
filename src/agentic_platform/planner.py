@@ -17,24 +17,33 @@ class RulesPlanner:
         if match and any(word in lowered for word in ("calculate", "compute", "what is", "solve")):
             return Plan(
                 summary="Evaluate the arithmetic expression with the restricted calculator.",
-                steps=[ToolCall(
-                    tool_name="calculator",
-                    arguments={"expression": match.group(0)},
-                    rationale="The request contains a simple arithmetic expression.",
-                )],
+                steps=[
+                    ToolCall(
+                        tool_name="calculator",
+                        arguments={"expression": match.group(0)},
+                        rationale="The request contains a simple arithmetic expression.",
+                    )
+                ],
             )
         if any(word in lowered for word in ("time", "date", "utc")):
             return Plan(
                 summary="Retrieve the current UTC timestamp.",
-                steps=[ToolCall(tool_name="utc_time", rationale="The request asks for current time.")],
+                steps=[
+                    ToolCall(
+                        tool_name="utc_time",
+                        rationale="The request asks for current time.",
+                    )
+                ],
             )
         return Plan(
             summary="Search the local technical knowledge base for relevant context.",
-            steps=[ToolCall(
-                tool_name="knowledge_search",
-                arguments={"query": task},
-                rationale="Use the approved knowledge search tool to gather context.",
-            )],
+            steps=[
+                ToolCall(
+                    tool_name="knowledge_search",
+                    arguments={"query": task},
+                    rationale="Use the approved knowledge search tool to gather context.",
+                )
+            ],
         )
 
 
@@ -48,6 +57,8 @@ class OpenAIPlanner:
         self.model = model
 
     def create_plan(self, task: str) -> Plan:
+        import json
+
         from pydantic import ValidationError
 
         response = self.client.chat.completions.create(
@@ -67,8 +78,6 @@ class OpenAIPlanner:
                 {"role": "user", "content": task},
             ],
         )
-        import json
-
         try:
             payload = json.loads(response.choices[0].message.content or "{}")
             return Plan.model_validate(payload)
