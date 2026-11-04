@@ -13,8 +13,12 @@ class RulesPlanner:
 
     def create_plan(self, task: str) -> Plan:
         lowered = task.lower()
-        match = re.search(r"[-+]?\d+(?:\.\d+)?\s*[+*/%\-]\s*[-+]?\d+(?:\.\d+)?", task)
-        if match and any(word in lowered for word in ("calculate", "compute", "what is", "solve")):
+        expression_pattern = (
+            r"[-+]?\d+(?:\.\d+)?\s*[+*/%\-]\s*[-+]?\d+(?:\.\d+)?"
+        )
+        match = re.search(expression_pattern, task)
+        calculation_intent = ("calculate", "compute", "what is", "solve")
+        if match and any(word in lowered for word in calculation_intent):
             return Plan(
                 summary="Evaluate the arithmetic expression with the restricted calculator.",
                 steps=[
