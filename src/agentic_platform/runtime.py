@@ -36,6 +36,7 @@ class AgentRuntime:
         task_id = str(uuid4())
         trace = [TraceEvent(event="task.started", details={"task_id": task_id})]
         results: list[ToolResult] = []
+        final_results: list[ToolResult] = []
         started = time.monotonic()
 
         try:
@@ -66,6 +67,7 @@ class AgentRuntime:
                 break
 
             attempt = 0
+            step_result: ToolResult | None = None
             while True:
                 if time.monotonic() - started > settings.agent_timeout_seconds:
                     trace.append(
@@ -89,6 +91,7 @@ class AgentRuntime:
                 )
                 result = self.registry.execute(call.tool_name, call.arguments)
                 results.append(result)
+                step_result = result
                 trace.append(
                     TraceEvent(
                         event="tool.completed" if result.success else "tool.failed",
@@ -127,8 +130,11 @@ class AgentRuntime:
                     )
                 )
 
-        successful = [item for item in results if item.success]
-        failed = [item for item in results if not item.success]
+            if step_result is not None:
+                final_results.append(step_result)
+
+        successful = [item for item in final_results if item.success]
+        failed = [item for item in final_results if not item.success]
         if successful:
             answer = "\n".join(
                 f"{item.tool_name}: {item.output}" for item in successful
@@ -143,7 +149,7 @@ class AgentRuntime:
                 event="task.finished",
                 details={
                     "status": status,
-                    "steps_executed": len(results),
+                    "steps_executed": len(final_results),
                     "tool_attempts": len(results),
                 },
             )
@@ -152,7 +158,7 @@ class AgentRuntime:
             task_id=task_id,
             status=status,
             answer=answer,
-            steps_executed=len(results),
+            steps_executed=len(final_results),
             tool_results=results,
             trace=trace,
         )
