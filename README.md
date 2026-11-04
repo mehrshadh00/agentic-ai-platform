@@ -91,7 +91,8 @@ ruff check .
 
 - [x] Typed task, plan, tool, and trace models
 - [x] Safe local tool registry
-- [x] Deterministic planner and bounded runtime
+- [x] Deterministic planner, bounded runtime, and retry policy
+- [x] Structured reflection events for tool failures
 - [x] FastAPI task endpoint
 - [x] Unit and API tests
 - [ ] LangGraph execution backend
