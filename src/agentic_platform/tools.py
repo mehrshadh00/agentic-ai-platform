@@ -1,8 +1,10 @@
 import ast
 import operator
 import re
-from datetime import datetime, timezone
-from typing import Any, Callable
+import time
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -31,8 +33,6 @@ class Tool:
         self.handler = handler
 
     def run(self, arguments: dict[str, Any]) -> ToolResult:
-        import time
-
         started = time.perf_counter()
         try:
             validated = self.input_model.model_validate(arguments)
@@ -66,7 +66,11 @@ class ToolRegistry:
     def execute(self, name: str, arguments: dict[str, Any]) -> ToolResult:
         tool = self._tools.get(name)
         if tool is None:
-            return ToolResult(tool_name=name, success=False, error="Unknown or disallowed tool")
+            return ToolResult(
+                tool_name=name,
+                success=False,
+                error="Unknown or disallowed tool",
+            )
         return tool.run(arguments)
 
     def descriptions(self) -> list[dict[str, str]]:
@@ -133,16 +137,41 @@ def search_handler(data: SearchInput) -> list[str]:
         key=lambda item: len(terms & set(re.findall(r"[a-z0-9]+", item.lower()))),
         reverse=True,
     )
-    return [item for item in ranked if terms & set(re.findall(r"[a-z0-9]+", item.lower()))][:3]
+    return [
+        item
+        for item in ranked
+        if terms & set(re.findall(r"[a-z0-9]+", item.lower()))
+    ][:3]
 
 
 def time_handler(_: BaseModel) -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def build_registry() -> ToolRegistry:
     registry = ToolRegistry()
-    registry.register(Tool("calculator", "Safely evaluate basic arithmetic.", CalculatorInput, calculator_handler))
-    registry.register(Tool("knowledge_search", "Search the platform's built-in technical notes.", SearchInput, search_handler))
-    registry.register(Tool("utc_time", "Return the current UTC timestamp.", BaseModel, time_handler))
+    registry.register(
+        Tool(
+            "calculator",
+            "Safely evaluate basic arithmetic.",
+            CalculatorInput,
+            calculator_handler,
+        )
+    )
+    registry.register(
+        Tool(
+            "knowledge_search",
+            "Search the platform's built-in technical notes.",
+            SearchInput,
+            search_handler,
+        )
+    )
+    registry.register(
+        Tool(
+            "utc_time",
+            "Return the current UTC timestamp.",
+            BaseModel,
+            time_handler,
+        )
+    )
     return registry
