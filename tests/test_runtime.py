@@ -66,7 +66,8 @@ def test_runtime_retries_transient_tool_failure():
     result = runtime.run("calculate 19 * 23")
 
     assert attempts == 2
-    assert result.status == "partial"
-    assert result.steps_executed == 2
+    assert result.status == "completed"
+    assert result.steps_executed == 1
+    assert len(result.tool_results) == 2
     assert any(event.event == "tool.reflection" for event in result.trace)
     assert any(event.event == "tool.retry" for event in result.trace)
