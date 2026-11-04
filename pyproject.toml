@@ -16,6 +16,7 @@ dependencies = [
   "pydantic>=2.8,<3.0",
   "pydantic-settings>=2.4,<3.0",
   "openai>=1.50,<3.0",
+  "langgraph>=0.2,<2.0",
 ]
 
 [project.optional-dependencies]
