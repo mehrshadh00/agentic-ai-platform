@@ -1,6 +1,6 @@
 # Agentic AI Platform
 
-A modular, observable task-execution platform built around LangGraph orchestration, validated tool routing, bounded execution, and persistent traces.
+A modular, observable task-execution platform built around LangGraph orchestration, validated tool routing, bounded execution, and persistent memory.
 
 > **Status:** MVP foundation in active development. The deterministic planner works without credentials. OpenAI native function calling and multi-turn model-directed replanning are available as an optional planner.
 
@@ -11,7 +11,8 @@ This is not a chat UI with tools bolted on. It is an agent runtime with explicit
 - a registry that exposes only approved tools;
 - native OpenAI function schemas generated from Pydantic models;
 - bounded multi-turn planning, tool steps, retries, and execution time;
-- structured traces, persistent task history, and session-scoped conversation memory;
+- structured traces and persistent task history;
+- short-term SQLite conversation history and optional vector-based semantic memory;
 - deterministic tests that do not require network access or an LLM.
 
 ## Architecture
@@ -29,7 +30,7 @@ Client -> FastAPI -> LangGraph Runtime
                        |
              Reflection / retry
                        |
-              SQLite trace store
+             SQLite + ChromaDB
                        |
                 Task response
 ```
@@ -50,6 +51,25 @@ uvicorn agentic_platform.api:app --reload
 
 Open `http://127.0.0.1:8000/docs`.
 
+## Enable semantic memory
+
+Semantic memory is optional and disabled by default. It uses ChromaDB for persistent vector storage and SentenceTransformers for local embeddings.
+
+```bash
+pip install -e ".[dev,semantic-memory]"
+```
+
+Then set these values in `.env`:
+
+```dotenv
+AGENT_SEMANTIC_MEMORY_ENABLED=true
+AGENT_SEMANTIC_MEMORY_PATH=./data/semantic_memory
+AGENT_SEMANTIC_MEMORY_MODEL=sentence-transformers/all-MiniLM-L6-v2
+AGENT_SEMANTIC_MEMORY_TOP_K=3
+```
+
+The embedding model is downloaded on first use. Memories are scoped by `session_id`; retrieval never searches across sessions. Each successful interaction is stored as a user/assistant memory pair. Keep this feature disabled if local vector dependencies are not installed.
+
 ## Example
 
 ```bash
@@ -57,6 +77,8 @@ curl -X POST http://127.0.0.1:8000/tasks \
   -H "Content-Type: application/json" \
   -d '{"task":"Calculate 19 * 23"}'
 ```
+
+Reuse the returned `session_id` in subsequent requests to maintain continuity.
 
 ## Configuration
 
@@ -70,17 +92,23 @@ curl -X POST http://127.0.0.1:8000/tasks \
 | `AGENT_MAX_STEPS` | Maximum tool calls per task | `5` |
 | `AGENT_MAX_RETRIES` | Maximum retries after tool failures | `1` |
 | `AGENT_TIMEOUT_SECONDS` | Total execution budget | `20` |
-| `AGENT_DATABASE_PATH` | SQLite database file | `./data/agentic_platform.db` |\n| `AGENT_MEMORY_MAX_MESSAGES` | Maximum stored messages per session | `20` |
+| `AGENT_DATABASE_PATH` | SQLite database file | `./data/agentic_platform.db` |
+| `AGENT_MEMORY_MAX_MESSAGES` | Maximum short-term messages per session | `20` |
+| `AGENT_SEMANTIC_MEMORY_ENABLED` | Enable ChromaDB vector memory | `false` |
+| `AGENT_SEMANTIC_MEMORY_PATH` | Persistent vector database path | `./data/semantic_memory` |
+| `AGENT_SEMANTIC_MEMORY_MODEL` | Local embedding model | `all-MiniLM-L6-v2` |
+| `AGENT_SEMANTIC_MEMORY_TOP_K` | Retrieved memories per task | `3` |
 
 Set `AGENT_PLANNER=openai` and provide `OPENAI_API_KEY` to enable model-directed tool selection. Native function calling is the default OpenAI strategy. Set `AGENT_OPENAI_STRATEGY=json_plan` to use the legacy JSON-plan adapter. If no API key is configured, the runtime safely falls back to the deterministic rules planner.
 
 ## Persistence and API
 
-Task responses, ordered trace events, and session-scoped conversation memory are persisted in SQLite. Send the same `session_id` with successive task requests to restore prior user/assistant messages as context. If omitted, a new isolated session is created. Memory is bounded by `AGENT_MEMORY_MAX_MESSAGES` and can be inspected through the session memory endpoint. The database is created automatically at the configured path; the local `data/` directory is ignored by Git.
+Task responses, ordered trace events, and short-term session history are persisted in SQLite. When enabled, ChromaDB stores vector embeddings for completed user/assistant turns. Both memory layers are scoped to the session ID. The database directories are created automatically and ignored by Git.
 
 - `POST /tasks` executes a task and stores its report.
 - `GET /tasks/{task_id}` retrieves a persisted task report.
-- `GET /tasks/{task_id}/trace` retrieves its ordered execution trace.\n- `GET /sessions/{session_id}/memory` retrieves the bounded conversation history.
+- `GET /tasks/{task_id}/trace` retrieves its ordered execution trace.
+- `GET /sessions/{session_id}/memory` retrieves bounded short-term conversation history.
 
 ## Safety model
 
@@ -88,7 +116,8 @@ Task responses, ordered trace events, and session-scoped conversation memory are
 - OpenAI receives only function schemas exported by the allow-listed registry.
 - Tool arguments are validated with Pydantic before execution.
 - Each task has a bounded number of steps, retries, and wall-clock time.
-- Tool errors are recorded as observations rather than silently discarded.
+- Retrieved memory is provided as context, not as executable instructions.
+- Vector retrieval is isolated by session ID.
 - No secrets are returned in task results or traces.
 
 ## Development
@@ -106,9 +135,11 @@ ruff check .
 - [x] Structured reflection events for tool failures
 - [x] FastAPI task endpoint and persisted task retrieval
 - [x] LangGraph execution backend
-- [x] SQLite task and trace storage\n- [x] Session-scoped persistent conversation memory
+- [x] SQLite task and trace storage
+- [x] Session-scoped persistent conversation memory
 - [x] OpenAI native function-calling planner
 - [x] Multi-turn tool observations and model-directed replanning
+- [x] Optional ChromaDB semantic memory with session-isolated retrieval
 - [ ] Authentication, rate limiting, and Docker deployment
 
 ## License
