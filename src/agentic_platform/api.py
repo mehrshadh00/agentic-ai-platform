@@ -1,12 +1,36 @@
+import logging
+import time
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 
 from agentic_platform.config import settings
 from agentic_platform.memory import SQLiteConversationMemory
 from agentic_platform.models import TaskRequest, TaskResponse, TraceEvent
 from agentic_platform.runtime import AgentRuntime
 from agentic_platform.storage import SQLiteTraceStore
+from agentic_platform.security import FixedWindowRateLimiter, verify_api_key
+
+logger = logging.getLogger(__name__)
+rate_limiter = FixedWindowRateLimiter(settings.agent_rate_limit_per_minute)
+
+
+def secure_api_access(request: Request) -> None:
+    supplied_key = request.headers.get("X-API-Key")
+    if not verify_api_key(settings.agent_api_key, supplied_key):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing API key",
+            headers={"WWW-Authenticate": "ApiKey"},
+        )
+    client_id = request.client.host if request.client else "unknown"
+    allowed, retry_after = rate_limiter.allow(client_id)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded",
+            headers={"Retry-After": str(retry_after)},
+        )
 
 
 def build_runtime():
@@ -20,7 +44,7 @@ def build_runtime():
 app = FastAPI(
     title="Agentic AI Platform",
     description="A bounded and observable agent runtime with validated tool execution.",
-    version="0.6.0",
+    version="0.7.0",
 )
 runtime = build_runtime()
 store = SQLiteTraceStore(settings.agent_database_path)
@@ -41,6 +65,18 @@ if settings.agent_semantic_memory_enabled:
     )
 
 
+@app.middleware("http")
+async def request_logging(request: Request, call_next):
+    started = time.perf_counter()
+    response = await call_next(request)
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    logger.info(
+        "request method=%s path=%s status=%s duration_ms=%.2f",
+        request.method, request.url.path, response.status_code, elapsed_ms,
+    )
+    return response
+
+
 @app.get("/health")
 def health() -> dict[str, str | bool]:
     return {
@@ -50,7 +86,7 @@ def health() -> dict[str, str | bool]:
     }
 
 
-@app.post("/tasks", response_model=TaskResponse)
+@app.post("/tasks", response_model=TaskResponse, dependencies=[Depends(secure_api_access)])
 def create_task(request: TaskRequest) -> TaskResponse:
     session_id = request.session_id or str(uuid4())
     try:
@@ -95,7 +131,7 @@ def create_task(request: TaskRequest) -> TaskResponse:
         raise HTTPException(status_code=500, detail="Task execution failed") from exc
 
 
-@app.get("/tasks/{task_id}", response_model=TaskResponse)
+@app.get("/tasks/{task_id}", response_model=TaskResponse, dependencies=[Depends(secure_api_access)])
 def get_task(task_id: str) -> TaskResponse:
     response = store.get_response(task_id)
     if response is None:
@@ -103,7 +139,7 @@ def get_task(task_id: str) -> TaskResponse:
     return response
 
 
-@app.get("/tasks/{task_id}/trace", response_model=list[TraceEvent])
+@app.get("/tasks/{task_id}/trace", response_model=list[TraceEvent], dependencies=[Depends(secure_api_access)])
 def get_task_trace(task_id: str) -> list[TraceEvent]:
     trace = store.get_trace(task_id)
     if trace is None:
@@ -111,12 +147,12 @@ def get_task_trace(task_id: str) -> list[TraceEvent]:
     return trace
 
 
-@app.get("/sessions/{session_id}/memory")
+@app.get("/sessions/{session_id}/memory", dependencies=[Depends(secure_api_access)])
 def get_session_memory(session_id: str) -> dict[str, object]:
     return {"session_id": session_id, "messages": memory.get_history(session_id)}
 
 
-@app.delete("/sessions/{session_id}/memory")
+@app.delete("/sessions/{session_id}/memory", dependencies=[Depends(secure_api_access)])
 def clear_session_memory(session_id: str) -> dict[str, object]:
     deleted_messages = memory.clear(session_id)
     if semantic_memory is not None:
@@ -128,7 +164,7 @@ def clear_session_memory(session_id: str) -> dict[str, object]:
     }
 
 
-@app.get("/sessions/{session_id}/semantic-memory")
+@app.get("/sessions/{session_id}/semantic-memory", dependencies=[Depends(secure_api_access)])
 def list_semantic_memories(session_id: str) -> dict[str, object]:
     if semantic_memory is None:
         raise HTTPException(status_code=503, detail="Semantic memory is disabled")
@@ -138,7 +174,7 @@ def list_semantic_memories(session_id: str) -> dict[str, object]:
     }
 
 
-@app.delete("/sessions/{session_id}/semantic-memory/{memory_id}")
+@app.delete("/sessions/{session_id}/semantic-memory/{memory_id}", dependencies=[Depends(secure_api_access)])
 def delete_semantic_memory(session_id: str, memory_id: str) -> dict[str, object]:
     if semantic_memory is None:
         raise HTTPException(status_code=503, detail="Semantic memory is disabled")
@@ -148,7 +184,7 @@ def delete_semantic_memory(session_id: str, memory_id: str) -> dict[str, object]
     return {"session_id": session_id, "deleted_memory_id": memory_id}
 
 
-@app.post("/sessions/{session_id}/semantic-memory/prune")
+@app.post("/sessions/{session_id}/semantic-memory/prune", dependencies=[Depends(secure_api_access)])
 def prune_semantic_memory(session_id: str) -> dict[str, object]:
     if semantic_memory is None:
         raise HTTPException(status_code=503, detail="Semantic memory is disabled")
