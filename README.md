@@ -2,7 +2,7 @@
 
 A modular, observable task-execution platform built around LangGraph orchestration, validated tool routing, bounded execution, and persistent traces.
 
-> **Status:** MVP foundation in active development. The deterministic planner works without credentials. OpenAI native function calling is available as an optional planner.
+> **Status:** MVP foundation in active development. The deterministic planner works without credentials. OpenAI native function calling and multi-turn model-directed replanning are available as an optional planner.
 
 ## Why this project?
 
@@ -10,7 +10,7 @@ This is not a chat UI with tools bolted on. It is an agent runtime with explicit
 - typed task plans and validated tool inputs/outputs;
 - a registry that exposes only approved tools;
 - native OpenAI function schemas generated from Pydantic models;
-- bounded steps, retries, and execution time;
+- bounded multi-turn planning, tool steps, retries, and execution time;
 - structured traces and persistent task history;
 - deterministic tests that do not require network access or an LLM.
 
@@ -108,7 +108,7 @@ ruff check .
 - [x] LangGraph execution backend
 - [x] SQLite task and trace storage
 - [x] OpenAI native function-calling planner
-- [ ] Multi-turn tool observations and model-directed replanning
+- [x] Multi-turn tool observations and model-directed replanning
 - [ ] Authentication, rate limiting, and Docker deployment
 
 ## License
