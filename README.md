@@ -12,7 +12,8 @@ This is not a chat UI with tools bolted on. It is an agent runtime with explicit
 - native OpenAI function schemas generated from Pydantic models;
 - bounded multi-turn planning, tool steps, retries, and execution time;
 - structured traces and persistent task history;
-- short-term SQLite conversation history and optional vector-based semantic memory;
+- short-term SQLite history and optional ChromaDB semantic memory;
+- memory deduplication, expiry, importance ranking, and retention caps;
 - deterministic tests that do not require network access or an LLM.
 
 ## Architecture
@@ -30,7 +31,7 @@ Client -> FastAPI -> LangGraph Runtime
                        |
              Reflection / retry
                        |
-             SQLite + ChromaDB
+          SQLite + ChromaDB Memory
                        |
                 Task response
 ```
@@ -59,16 +60,19 @@ Semantic memory is optional and disabled by default. It uses ChromaDB for persis
 pip install -e ".[dev,semantic-memory]"
 ```
 
-Then set these values in `.env`:
+Configure `.env`:
 
 ```dotenv
 AGENT_SEMANTIC_MEMORY_ENABLED=true
 AGENT_SEMANTIC_MEMORY_PATH=./data/semantic_memory
 AGENT_SEMANTIC_MEMORY_MODEL=sentence-transformers/all-MiniLM-L6-v2
 AGENT_SEMANTIC_MEMORY_TOP_K=3
+AGENT_SEMANTIC_MEMORY_MAX_ITEMS=100
+AGENT_SEMANTIC_MEMORY_TTL_DAYS=0
+AGENT_SEMANTIC_MEMORY_DUPLICATE_DISTANCE=0.08
 ```
 
-The embedding model is downloaded on first use. Memories are scoped by `session_id`; retrieval never searches across sessions. Each successful interaction is stored as a user/assistant memory pair. Keep this feature disabled if local vector dependencies are not installed.
+The embedding model is downloaded on first use. Memories are scoped by `session_id`; retrieval never searches across sessions. Each successful interaction is stored as a user/assistant memory pair. A TTL of `0` means no automatic expiry. The per-session cap evicts lower-importance, older memories first. Keep this feature disabled if local vector dependencies are not installed.
 
 ## Example
 
@@ -98,17 +102,24 @@ Reuse the returned `session_id` in subsequent requests to maintain continuity.
 | `AGENT_SEMANTIC_MEMORY_PATH` | Persistent vector database path | `./data/semantic_memory` |
 | `AGENT_SEMANTIC_MEMORY_MODEL` | Local embedding model | `all-MiniLM-L6-v2` |
 | `AGENT_SEMANTIC_MEMORY_TOP_K` | Retrieved memories per task | `3` |
+| `AGENT_SEMANTIC_MEMORY_MAX_ITEMS` | Maximum vector memories per session | `100` |
+| `AGENT_SEMANTIC_MEMORY_TTL_DAYS` | Memory expiry in days; `0` disables expiry | `0` |
+| `AGENT_SEMANTIC_MEMORY_DUPLICATE_DISTANCE` | Cosine-distance threshold for deduplication | `0.08` |
 
 Set `AGENT_PLANNER=openai` and provide `OPENAI_API_KEY` to enable model-directed tool selection. Native function calling is the default OpenAI strategy. Set `AGENT_OPENAI_STRATEGY=json_plan` to use the legacy JSON-plan adapter. If no API key is configured, the runtime safely falls back to the deterministic rules planner.
 
 ## Persistence and API
 
-Task responses, ordered trace events, and short-term session history are persisted in SQLite. When enabled, ChromaDB stores vector embeddings for completed user/assistant turns. Both memory layers are scoped to the session ID. The database directories are created automatically and ignored by Git.
+Task responses, ordered trace events, and short-term session history are persisted in SQLite. When enabled, ChromaDB stores vector embeddings for completed user/assistant turns. Both memory layers are scoped to the session ID.
 
 - `POST /tasks` executes a task and stores its report.
 - `GET /tasks/{task_id}` retrieves a persisted task report.
 - `GET /tasks/{task_id}/trace` retrieves its ordered execution trace.
-- `GET /sessions/{session_id}/memory` retrieves bounded short-term conversation history.
+- `GET /sessions/{session_id}/memory` retrieves short-term conversation history.
+- `DELETE /sessions/{session_id}/memory` clears both memory layers for that session.
+- `GET /sessions/{session_id}/semantic-memory` lists active vector memories.
+- `DELETE /sessions/{session_id}/semantic-memory/{memory_id}` deletes one memory owned by that session.
+- `POST /sessions/{session_id}/semantic-memory/prune` removes expired and over-capacity memories.
 
 ## Safety model
 
@@ -117,7 +128,8 @@ Task responses, ordered trace events, and short-term session history are persist
 - Tool arguments are validated with Pydantic before execution.
 - Each task has a bounded number of steps, retries, and wall-clock time.
 - Retrieved memory is provided as context, not as executable instructions.
-- Vector retrieval is isolated by session ID.
+- Vector retrieval and deletion are isolated by session ID.
+- Memory retention is bounded; TTL and explicit deletion are supported.
 - No secrets are returned in task results or traces.
 
 ## Development
@@ -140,6 +152,7 @@ ruff check .
 - [x] OpenAI native function-calling planner
 - [x] Multi-turn tool observations and model-directed replanning
 - [x] Optional ChromaDB semantic memory with session-isolated retrieval
+- [x] Memory deduplication, expiry, retention limits, and management endpoints
 - [ ] Authentication, rate limiting, and Docker deployment
 
 ## License
