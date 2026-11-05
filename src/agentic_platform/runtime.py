@@ -3,13 +3,20 @@ from uuid import uuid4
 
 from agentic_platform.config import settings
 from agentic_platform.models import TaskResponse, ToolResult, TraceEvent
-from agentic_platform.planner import OpenAIPlanner, Planner, RulesPlanner
+from agentic_platform.planner import (
+    OpenAIPlanner,
+    OpenAIToolCallingPlanner,
+    Planner,
+    RulesPlanner,
+)
 from agentic_platform.tools import build_registry
 
 
 def get_planner() -> Planner:
     if settings.agent_planner.lower() == "openai" and settings.openai_api_key:
-        return OpenAIPlanner(settings.openai_api_key, settings.openai_model)
+        if settings.agent_openai_strategy.lower() == "json_plan":
+            return OpenAIPlanner(settings.openai_api_key, settings.openai_model)
+        return OpenAIToolCallingPlanner(settings.openai_api_key, settings.openai_model)
     return RulesPlanner()
 
 
