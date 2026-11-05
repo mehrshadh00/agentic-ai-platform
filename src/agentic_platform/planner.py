@@ -2,6 +2,7 @@ import re
 from typing import Protocol
 
 from agentic_platform.models import Plan, ToolCall
+from agentic_platform.metrics import record_llm_usage
 
 
 class Planner(Protocol):
@@ -82,6 +83,7 @@ class OpenAIPlanner:
                 {"role": "user", "content": task},
             ],
         )
+        record_llm_usage(self.model, getattr(response, "usage", None))
         try:
             payload = json.loads(response.choices[0].message.content or "{}")
             return Plan.model_validate(payload)
@@ -130,6 +132,7 @@ class OpenAIToolCallingPlanner:
                 *history,
             ],
         )
+        record_llm_usage(self.model, getattr(response, "usage", None))
         message = response.choices[0].message
         tool_calls = message.tool_calls or []
         assistant_message = {
