@@ -31,6 +31,12 @@ class FixedWindowRateLimiter:
                 self._windows[client_id] = (window, count)
                 return False, retry_after
             self._windows[client_id] = (window, count + 1)
+            # Bound memory growth from clients that never return.
+            if len(self._windows) > 10_000:
+                self._windows = {
+                    key: value for key, value in self._windows.items()
+                    if value[0] >= window - 1
+                }
             return True, 0
 
     def reset(self) -> None:
