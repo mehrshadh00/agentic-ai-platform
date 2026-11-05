@@ -17,6 +17,7 @@ dependencies = [
   "pydantic-settings>=2.4,<3.0",
   "openai>=1.50,<3.0",
   "langgraph>=0.2,<2.0",
+  "prometheus-client>=0.20,<1.0",
 ]
 
 [project.optional-dependencies]
