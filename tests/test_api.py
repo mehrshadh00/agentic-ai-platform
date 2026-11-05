@@ -19,3 +19,17 @@ def test_task_endpoint_returns_execution_report():
     assert payload["steps_executed"] == 1
     assert "437" in payload["answer"]
     assert payload["trace"]
+
+    task_id = payload["task_id"]
+    persisted = client.get(f"/tasks/{task_id}")
+    persisted_trace = client.get(f"/tasks/{task_id}/trace")
+
+    assert persisted.status_code == 200
+    assert persisted.json() == payload
+    assert persisted_trace.status_code == 200
+    assert persisted_trace.json() == payload["trace"]
+
+
+def test_unknown_task_returns_404():
+    assert client.get("/tasks/not-a-real-task").status_code == 404
+    assert client.get("/tasks/not-a-real-task/trace").status_code == 404
