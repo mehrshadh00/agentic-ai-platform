@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     agent_semantic_memory_path: str = "./data/semantic_memory"
     agent_semantic_memory_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     agent_semantic_memory_top_k: int = 3
+    agent_semantic_memory_max_items: int = 100
+    agent_semantic_memory_ttl_days: int = 0
+    agent_semantic_memory_duplicate_distance: float = 0.08
 
 
 settings = Settings()
