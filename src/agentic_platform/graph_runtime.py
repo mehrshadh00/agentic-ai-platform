@@ -149,6 +149,16 @@ class GraphAgentRuntime:
 
         if result.success:
             final_results.append(result)
+            if call.tool_call_id:
+                history.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call.tool_call_id,
+                        "content": json.dumps(
+                            result.output, ensure_ascii=False, default=str
+                        ),
+                    }
+                )
         if result.success:
             return {
                 "tool_results": results,
