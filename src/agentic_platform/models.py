@@ -43,10 +43,12 @@ class TraceEvent(BaseModel):
 
 class TaskRequest(BaseModel):
     task: str = Field(min_length=3, max_length=4000)
+    session_id: str | None = Field(default=None, min_length=1, max_length=120)
 
 
 class TaskResponse(BaseModel):
     task_id: str = Field(default_factory=lambda: str(uuid4()))
+    session_id: str | None = None
     status: Literal["completed", "partial", "failed"]
     answer: str
     steps_executed: int
