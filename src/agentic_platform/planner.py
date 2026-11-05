@@ -90,7 +90,7 @@ class OpenAIPlanner:
 
 
 class OpenAIToolCallingPlanner:
-    """Use native OpenAI function calling to select registered tools."""
+    """Use native OpenAI function calling with multi-turn tool observations."""
 
     def __init__(self, api_key: str, model: str, registry=None, client=None) -> None:
         from openai import OpenAI
@@ -102,31 +102,51 @@ class OpenAIToolCallingPlanner:
         self.registry = registry or build_registry()
 
     def create_plan(self, task: str) -> Plan:
+        return self.create_plan_with_history(task, [])
+
+    def create_plan_with_history(
+        self, task: str, history: list[dict[str, object]]
+    ) -> Plan:
         import json
 
         response = self.client.chat.completions.create(
             model=self.model,
             temperature=0,
-            tool_choice="required",
+            tool_choice="auto",
             parallel_tool_calls=False,
             tools=self.registry.openai_tools(),
             messages=[
                 {
                     "role": "system",
                     "content": (
-                        "Select the approved function tool or tools needed to complete "
-                        "the user's task. Only call tools exposed in the tool list. "
-                        "Use valid JSON arguments matching each tool schema. "
-                        "Do not attempt shell, filesystem, network, or arbitrary code execution."
+                        "You are an agent that completes the user's task using approved tools. "
+                        "Use only the provided tools. After receiving tool results, decide whether "
+                        "another tool is needed. If the task is complete, respond with a concise "
+                        "final answer and do not call a tool. Never request shell, filesystem, "
+                        "network, or arbitrary code execution."
                     ),
                 },
                 {"role": "user", "content": task},
+                *history,
             ],
         )
         message = response.choices[0].message
         tool_calls = message.tool_calls or []
-        if not tool_calls:
-            raise RuntimeError("OpenAI did not return a required tool call")
+        assistant_message = {
+            "role": "assistant",
+            "content": message.content,
+            "tool_calls": [
+                {
+                    "id": item.id,
+                    "type": "function",
+                    "function": {
+                        "name": item.function.name,
+                        "arguments": item.function.arguments or "{}",
+                    },
+                }
+                for item in tool_calls
+            ],
+        } if tool_calls else None
 
         steps = []
         for item in tool_calls:
@@ -139,9 +159,16 @@ class OpenAIToolCallingPlanner:
                     tool_name=item.function.name,
                     arguments=arguments,
                     rationale="Selected by OpenAI native function calling.",
+                    tool_call_id=item.id,
                 )
             )
         return Plan(
-            summary="OpenAI selected tools using native function calling.",
+            summary=(
+                "OpenAI selected tools using native function calling."
+                if steps
+                else "OpenAI completed the task without another tool call."
+            ),
             steps=steps,
+            assistant_message=assistant_message,
+            final_answer=message.content if not steps else None,
         )
