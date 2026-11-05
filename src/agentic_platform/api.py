@@ -140,7 +140,11 @@ def get_task(task_id: str) -> TaskResponse:
     return response
 
 
-@app.get("/tasks/{task_id}/trace", response_model=list[TraceEvent], dependencies=[Depends(secure_api_access)])
+@app.get(
+    "/tasks/{task_id}/trace",
+    response_model=list[TraceEvent],
+    dependencies=[Depends(secure_api_access)],
+)
 def get_task_trace(task_id: str) -> list[TraceEvent]:
     trace = store.get_trace(task_id)
     if trace is None:
@@ -175,7 +179,10 @@ def list_semantic_memories(session_id: str) -> dict[str, object]:
     }
 
 
-@app.delete("/sessions/{session_id}/semantic-memory/{memory_id}", dependencies=[Depends(secure_api_access)])
+@app.delete(
+    "/sessions/{session_id}/semantic-memory/{memory_id}",
+    dependencies=[Depends(secure_api_access)],
+)
 def delete_semantic_memory(session_id: str, memory_id: str) -> dict[str, object]:
     if semantic_memory is None:
         raise HTTPException(status_code=503, detail="Semantic memory is disabled")
