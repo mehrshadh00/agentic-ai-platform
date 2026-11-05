@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     agent_planner: str = "rules"
     agent_openai_strategy: str = "tool_calling"
     openai_api_key: str | None = None
+    agent_api_key: str | None = None
+    agent_rate_limit_per_minute: int = 60
     openai_model: str = "gpt-4.1-mini"
     agent_max_steps: int = 5
     agent_max_retries: int = 1
