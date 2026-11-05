@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
-from agentic_platform.api import app
+from agentic_platform.api import app, rate_limiter
+from agentic_platform.config import settings
 
 client = TestClient(app)
 
@@ -75,3 +76,34 @@ def test_clear_session_memory_endpoint():
 def test_semantic_memory_management_requires_feature_flag():
     response = client.get("/sessions/test-session/semantic-memory")
     assert response.status_code == 503
+
+
+
+def test_protected_endpoints_require_api_key_when_configured(monkeypatch):
+    monkeypatch.setattr(settings, "agent_api_key", "test-secret")
+    rate_limiter.reset()
+    denied = client.post("/tasks", json={"task": "Calculate 1 + 1"})
+    assert denied.status_code == 401
+    assert denied.headers["www-authenticate"] == "ApiKey"
+    allowed = client.post(
+        "/tasks",
+        json={"task": "Calculate 1 + 1"},
+        headers={"X-API-Key": "test-secret"},
+    )
+    assert allowed.status_code == 200
+    assert client.get("/health").status_code == 200
+    monkeypatch.setattr(settings, "agent_api_key", None)
+    rate_limiter.reset()
+
+
+def test_api_rate_limit_returns_retry_after(monkeypatch):
+    monkeypatch.setattr(settings, "agent_api_key", None)
+    rate_limiter.requests_per_minute = 1
+    rate_limiter.reset()
+    first = client.get("/tasks/not-a-real-task")
+    second = client.get("/tasks/not-a-real-task")
+    assert first.status_code == 404
+    assert second.status_code == 429
+    assert int(second.headers["retry-after"]) >= 1
+    rate_limiter.requests_per_minute = 60
+    rate_limiter.reset()
