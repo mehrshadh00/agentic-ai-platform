@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     agent_max_steps: int = 5
     agent_max_retries: int = 1
     agent_timeout_seconds: float = 20.0
+    agent_database_path: str = "./data/agentic_platform.db"
 
 
 settings = Settings()
