@@ -4,7 +4,7 @@ A modular, observable task-execution platform built around LangGraph orchestrati
 
 > **Status:** MVP foundation in active development. The deterministic planner works without credentials. OpenAI native function calling and multi-turn model-directed replanning are available as an optional planner.
 
-## Why this project?
+## Continuous integration\n\nGitHub Actions runs Ruff and the Python test suite, validates the Docker Compose configuration, builds the production image, then starts a container and smoke-tests its public health endpoint, API-key protection, and deterministic task execution.\n\n## Why this project?
 
 This is not a chat UI with tools bolted on. It is an agent runtime with explicit boundaries:
 - typed task plans and validated tool inputs/outputs;
