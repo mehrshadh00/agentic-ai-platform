@@ -23,3 +23,47 @@ jobs:
         run: ruff check .
       - name: Test
         run: pytest -q
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Docker Compose configuration
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
+      - name: Build Docker image
+        run: docker build --pull -t agentic-ai-platform:ci .
+      - name: Start container
+        run: |
+          docker run --detach --name agentic-ai-platform-ci \
+            --publish 127.0.0.1:8000:8000 \
+            --env AGENT_API_KEY=ci-smoke-test-key \
+            --env AGENT_DATABASE_PATH=/app/data/ci.db \
+            agentic-ai-platform:ci
+      - name: Smoke test health, authentication, and task execution
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:8000/health > /tmp/health.json; then
+              break
+            fi
+            sleep 2
+          done
+          python -c "import json; d=json.load(open('/tmp/health.json')); assert d['status'] == 'ok', d"
+          status=$(curl --silent --output /tmp/unauthorized.json --write-out '%{http_code}' \
+            http://127.0.0.1:8000/tasks \
+            --header 'Content-Type: application/json' \
+            --data '{"task":"Calculate 19 * 23"}')
+          test "$status" = "401"
+          curl --silent --show-error --fail http://127.0.0.1:8000/tasks \
+            --header 'X-API-Key: ci-smoke-test-key' \
+            --header 'Content-Type: application/json' \
+            --data '{"task":"Calculate 19 * 23"}' > /tmp/task.json
+          python -c "import json; d=json.load(open('/tmp/task.json')); assert d['status'] == 'completed', d; assert '437' in d['answer'], d"
+      - name: Container logs on failure
+        if: failure()
+        run: docker logs agentic-ai-platform-ci
+      - name: Stop container
+        if: always()
+        run: docker rm --force agentic-ai-platform-ci || true
