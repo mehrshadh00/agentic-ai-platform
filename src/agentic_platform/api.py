@@ -2,13 +2,19 @@ import logging
 import time
 from uuid import uuid4
 
-from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
-
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from agentic_platform.config import settings
 from agentic_platform.memory import SQLiteConversationMemory
-from agentic_platform.metrics import HTTP_REQUESTS, HTTP_REQUEST_DURATION, TASKS_TOTAL, TASK_DURATION, TOOL_CALLS_TOTAL, TOOL_DURATION
+from agentic_platform.metrics import (
+    HTTP_REQUEST_DURATION,
+    HTTP_REQUESTS,
+    TASK_DURATION,
+    TASKS_TOTAL,
+    TOOL_CALLS_TOTAL,
+    TOOL_DURATION,
+)
 from agentic_platform.models import TaskRequest, TaskResponse, TraceEvent
 from agentic_platform.runtime import AgentRuntime
 from agentic_platform.security import FixedWindowRateLimiter, verify_api_key
