@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     agent_max_retries: int = 1
     agent_timeout_seconds: float = 20.0
     agent_database_path: str = "./data/agentic_platform.db"
+    agent_memory_max_messages: int = 20
 
 
 settings = Settings()
