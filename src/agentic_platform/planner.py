@@ -1,8 +1,8 @@
 import re
 from typing import Protocol
 
-from agentic_platform.models import Plan, ToolCall
 from agentic_platform.metrics import record_llm_usage
+from agentic_platform.models import Plan, ToolCall
 
 
 class Planner(Protocol):
