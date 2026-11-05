@@ -64,3 +64,60 @@ def test_langgraph_runtime_retries_transient_tool_failure():
     assert len(result.tool_results) == 2
     assert any(event.event == "tool.reflection" for event in result.trace)
     assert any(event.event == "tool.retry" for event in result.trace)
+
+
+class MultiTurnPlanner:
+    def __init__(self):
+        self.turns = 0
+
+    def create_plan(self, task: str) -> Plan:
+        raise AssertionError("Multi-turn planner path should be used")
+
+    def create_plan_with_history(self, task: str, history):
+        self.turns += 1
+        if self.turns == 1:
+            return Plan(
+                summary="First turn: calculate the expression.",
+                steps=[
+                    ToolCall(
+                        tool_name="calculator",
+                        arguments={"expression": "19 * 23"},
+                        tool_call_id="call-calc-1",
+                    )
+                ],
+                assistant_message={
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "id": "call-calc-1",
+                            "type": "function",
+                            "function": {
+                                "name": "calculator",
+                                "arguments": '{"expression":"19 * 23"}',
+                            },
+                        }
+                    ],
+                },
+            )
+
+        assert history[-1]["role"] == "tool"
+        assert history[-1]["tool_call_id"] == "call-calc-1"
+        assert "437" in history[-1]["content"]
+        return Plan(
+            summary="Second turn: the tool result is sufficient.",
+            final_answer="The calculated result is 437.",
+        )
+
+
+def test_langgraph_runtime_replans_after_observing_tool_output():
+    planner = MultiTurnPlanner()
+    result = GraphAgentRuntime(planner=planner).run(
+        "Calculate 19 * 23 and explain the result."
+    )
+
+    assert planner.turns == 2
+    assert result.status == "completed"
+    assert result.steps_executed == 1
+    assert result.answer == "The calculated result is 437."
+    assert sum(event.event == "plan.created" for event in result.trace) == 2
+    assert any(event.event == "agent.completed" for event in result.trace)
