@@ -69,11 +69,11 @@ curl -X POST http://127.0.0.1:8000/tasks \
 | `OPENAI_MODEL` | Model for planning | `gpt-4.1-mini` |
 | `AGENT_MAX_STEPS` | Maximum tool calls per task | `5` |
 | `AGENT_MAX_RETRIES` | Maximum retries after tool failures | `1` |
-| `AGENT_TIMEOUT_SECONDS` | Total execution budget | `20` |
+| `AGENT_TIMEOUT_SECONDS` | Total execution budget | `20` |\n| `AGENT_DATABASE_PATH` | SQLite database file | `./data/agentic_platform.db` |
 
 The default rules planner is intentionally deterministic. The OpenAI planner is an optional adapter; tool execution remains constrained by the same registry and schemas.
 
-## Safety model
+## Persistence and API\n\nTask responses and ordered trace events are persisted in SQLite. The database is created automatically at the configured path (the local `data/` directory is ignored by Git).\n\n- `POST /tasks` executes a task and stores its report.\n- `GET /tasks/{task_id}` retrieves a persisted task report.\n- `GET /tasks/{task_id}/trace` retrieves its ordered execution trace.\n\n## Safety model
 
 - Tools are explicitly registered; arbitrary Python or shell execution is not exposed.
 - Tool arguments are validated with Pydantic.
@@ -98,7 +98,7 @@ ruff check .
 - [x] Unit and API tests
 - [x] LangGraph execution backend with plan, tool, and finalize nodes
 - [ ] OpenAI tool-calling planner
-- [ ] Persistent task/trace storage
+- [x] Persistent task/trace storage with SQLite and retrieval endpoints
 - [ ] Authentication, rate limiting, and Docker deployment
 
 ## License
