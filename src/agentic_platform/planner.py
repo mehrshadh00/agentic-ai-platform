@@ -87,3 +87,61 @@ class OpenAIPlanner:
             return Plan.model_validate(payload)
         except (ValueError, ValidationError) as exc:
             raise RuntimeError("Planner returned an invalid plan") from exc
+
+
+class OpenAIToolCallingPlanner:
+    """Use native OpenAI function calling to select registered tools."""
+
+    def __init__(self, api_key: str, model: str, registry=None, client=None) -> None:
+        from openai import OpenAI
+
+        from agentic_platform.tools import build_registry
+
+        self.client = client or OpenAI(api_key=api_key)
+        self.model = model
+        self.registry = registry or build_registry()
+
+    def create_plan(self, task: str) -> Plan:
+        import json
+
+        response = self.client.chat.completions.create(
+            model=self.model,
+            temperature=0,
+            tool_choice="required",
+            parallel_tool_calls=False,
+            tools=self.registry.openai_tools(),
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Select the approved function tool or tools needed to complete "
+                        "the user's task. Only call tools exposed in the tool list. "
+                        "Use valid JSON arguments matching each tool schema. "
+                        "Do not attempt shell, filesystem, network, or arbitrary code execution."
+                    ),
+                },
+                {"role": "user", "content": task},
+            ],
+        )
+        message = response.choices[0].message
+        tool_calls = message.tool_calls or []
+        if not tool_calls:
+            raise RuntimeError("OpenAI did not return a required tool call")
+
+        steps = []
+        for item in tool_calls:
+            try:
+                arguments = json.loads(item.function.arguments or "{}")
+            except (TypeError, ValueError) as exc:
+                raise RuntimeError("OpenAI returned invalid tool arguments") from exc
+            steps.append(
+                ToolCall(
+                    tool_name=item.function.name,
+                    arguments=arguments,
+                    rationale="Selected by OpenAI native function calling.",
+                )
+            )
+        return Plan(
+            summary="OpenAI selected tools using native function calling.",
+            steps=steps,
+        )
