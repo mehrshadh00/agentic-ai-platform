@@ -19,6 +19,10 @@ class SearchInput(BaseModel):
     query: str = Field(min_length=1, max_length=200)
 
 
+class EmptyInput(BaseModel):
+    """Input schema for tools that do not require arguments."""
+
+
 class Tool:
     def __init__(
         self,
@@ -184,7 +188,7 @@ def build_registry() -> ToolRegistry:
         Tool(
             "utc_time",
             "Return the current UTC timestamp.",
-            BaseModel,
+            EmptyInput,
             time_handler,
         )
     )
