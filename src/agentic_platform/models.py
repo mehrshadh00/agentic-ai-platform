@@ -15,13 +15,16 @@ class ToolCall(BaseModel):
     tool_name: str = Field(min_length=1, max_length=80)
     arguments: dict[str, Any] = Field(default_factory=dict)
     rationale: str = Field(default="", max_length=500)
+    tool_call_id: str | None = None
 
 
 class Plan(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    steps: list[ToolCall] = Field(min_length=1, max_length=20)
+    steps: list[ToolCall] = Field(default_factory=list, max_length=20)
     summary: str = Field(default="", max_length=500)
+    assistant_message: dict[str, Any] | None = None
+    final_answer: str | None = None
 
 
 class ToolResult(BaseModel):
