@@ -96,3 +96,37 @@ def test_native_tool_calling_accepts_final_answer_without_tool_calls():
 
     assert plan.steps == []
     assert plan.final_answer == "The task is complete."
+
+
+def test_native_planner_sends_prior_tool_observations_back_to_model():
+    client = FakeClient(
+        SimpleNamespace(tool_calls=None, content="The answer is 437.")
+    )
+    planner = OpenAIToolCallingPlanner(
+        api_key="test-key", model="test-model", client=client
+    )
+    history = [
+        {
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": "call-123",
+                    "type": "function",
+                    "function": {
+                        "name": "calculator",
+                        "arguments": '{"expression":"19 * 23"}',
+                    },
+                }
+            ],
+        },
+        {
+            "role": "tool",
+            "tool_call_id": "call-123",
+            "content": "437",
+        },
+    ]
+
+    plan = planner.create_plan_with_history("Calculate 19 * 23", history)
+
+    assert client.completions.request["messages"][-2:] == history
+    assert plan.final_answer == "The answer is 437."
