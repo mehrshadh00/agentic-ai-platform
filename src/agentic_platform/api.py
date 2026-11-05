@@ -8,21 +8,15 @@ from agentic_platform.config import settings
 from agentic_platform.memory import SQLiteConversationMemory
 from agentic_platform.models import TaskRequest, TaskResponse, TraceEvent
 from agentic_platform.runtime import AgentRuntime
-from agentic_platform.storage import SQLiteTraceStore
 from agentic_platform.security import FixedWindowRateLimiter, verify_api_key
+from agentic_platform.storage import SQLiteTraceStore
 
 logger = logging.getLogger(__name__)
 rate_limiter = FixedWindowRateLimiter(settings.agent_rate_limit_per_minute)
 
 
 def secure_api_access(request: Request) -> None:
-    supplied_key = request.headers.get("X-API-Key")
-    if not verify_api_key(settings.agent_api_key, supplied_key):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing API key",
-            headers={"WWW-Authenticate": "ApiKey"},
-        )
+    # Rate-limit before authentication so invalid-key attempts are throttled too.
     client_id = request.client.host if request.client else "unknown"
     allowed, retry_after = rate_limiter.allow(client_id)
     if not allowed:
@@ -30,6 +24,13 @@ def secure_api_access(request: Request) -> None:
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Rate limit exceeded",
             headers={"Retry-After": str(retry_after)},
+        )
+    supplied_key = request.headers.get("X-API-Key")
+    if not verify_api_key(settings.agent_api_key, supplied_key):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing API key",
+            headers={"WWW-Authenticate": "ApiKey"},
         )
 
 
