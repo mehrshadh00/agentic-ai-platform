@@ -174,7 +174,11 @@ class GraphAgentRuntime:
         trace.append(
             TraceEvent(
                 event="tool.reflection",
-                details={"step": state.get("total_steps", 0) + 1, "retryable": retryable, "reason": result.error},
+                details={
+                    "step": state.get("total_steps", 0) + 1,
+                    "retryable": retryable,
+                    "reason": result.error,
+                },
             )
         )
         if retryable and attempt < settings.agent_max_retries:
