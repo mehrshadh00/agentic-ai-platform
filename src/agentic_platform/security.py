@@ -6,7 +6,7 @@ import hmac
 import threading
 import time
 from collections import defaultdict
-from fastapi import HTTPException, Request, status
+from fastapi import HTTPException, status
 
 
 class FixedWindowRateLimiter:
