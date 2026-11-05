@@ -134,7 +134,7 @@ class OpenAIToolCallingPlanner:
         tool_calls = message.tool_calls or []
         assistant_message = {
             "role": "assistant",
-            "content": message.content,
+            "content": getattr(message, "content", None),
             "tool_calls": [
                 {
                     "id": item.id,
@@ -170,5 +170,5 @@ class OpenAIToolCallingPlanner:
             ),
             steps=steps,
             assistant_message=assistant_message,
-            final_answer=message.content if not steps else None,
+            final_answer=getattr(message, "content", None) if not steps else None,
         )
