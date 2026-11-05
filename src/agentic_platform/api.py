@@ -20,7 +20,7 @@ def build_runtime():
 app = FastAPI(
     title="Agentic AI Platform",
     description="A bounded and observable agent runtime with validated tool execution.",
-    version="0.5.0",
+    version="0.6.0",
 )
 runtime = build_runtime()
 store = SQLiteTraceStore(settings.agent_database_path)
@@ -35,6 +35,9 @@ if settings.agent_semantic_memory_enabled:
     semantic_memory = ChromaSemanticMemory.from_local_model(
         persist_directory=settings.agent_semantic_memory_path,
         model_name=settings.agent_semantic_memory_model,
+        duplicate_distance_threshold=settings.agent_semantic_memory_duplicate_distance,
+        max_items_per_session=settings.agent_semantic_memory_max_items,
+        ttl_days=settings.agent_semantic_memory_ttl_days,
     )
 
 
@@ -111,3 +114,45 @@ def get_task_trace(task_id: str) -> list[TraceEvent]:
 @app.get("/sessions/{session_id}/memory")
 def get_session_memory(session_id: str) -> dict[str, object]:
     return {"session_id": session_id, "messages": memory.get_history(session_id)}
+
+
+@app.delete("/sessions/{session_id}/memory")
+def clear_session_memory(session_id: str) -> dict[str, object]:
+    deleted_messages = memory.clear(session_id)
+    if semantic_memory is not None:
+        semantic_memory.clear(session_id)
+    return {
+        "session_id": session_id,
+        "deleted_short_term_messages": deleted_messages,
+        "semantic_memory_cleared": semantic_memory is not None,
+    }
+
+
+@app.get("/sessions/{session_id}/semantic-memory")
+def list_semantic_memories(session_id: str) -> dict[str, object]:
+    if semantic_memory is None:
+        raise HTTPException(status_code=503, detail="Semantic memory is disabled")
+    return {
+        "session_id": session_id,
+        "memories": semantic_memory.list_memories(session_id),
+    }
+
+
+@app.delete("/sessions/{session_id}/semantic-memory/{memory_id}")
+def delete_semantic_memory(session_id: str, memory_id: str) -> dict[str, object]:
+    if semantic_memory is None:
+        raise HTTPException(status_code=503, detail="Semantic memory is disabled")
+    deleted = semantic_memory.delete(session_id, memory_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Memory not found")
+    return {"session_id": session_id, "deleted_memory_id": memory_id}
+
+
+@app.post("/sessions/{session_id}/semantic-memory/prune")
+def prune_semantic_memory(session_id: str) -> dict[str, object]:
+    if semantic_memory is None:
+        raise HTTPException(status_code=503, detail="Semantic memory is disabled")
+    return {
+        "session_id": session_id,
+        **semantic_memory.prune(session_id),
+    }
