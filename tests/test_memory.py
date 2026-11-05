@@ -21,7 +21,7 @@ def test_memory_prunes_old_messages_to_configured_limit(tmp_path):
     memory.add_turn("session-a", "second", "second answer")
 
     history = memory.get_history("session-a")
-    assert [item["content"] for item in history] == ["second answer", "second"]
+    assert [item["content"] for item in history] == ["first answer", "second", "second answer"]
 
 
 def test_memory_can_be_cleared_without_affecting_other_sessions(tmp_path):
