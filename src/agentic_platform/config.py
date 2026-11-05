@@ -8,6 +8,7 @@ class Settings(BaseSettings):
 
     agent_runtime_backend: str = "langgraph"
     agent_planner: str = "rules"
+    agent_openai_strategy: str = "tool_calling"
     openai_api_key: str | None = None
     openai_model: str = "gpt-4.1-mini"
     agent_max_steps: int = 5
