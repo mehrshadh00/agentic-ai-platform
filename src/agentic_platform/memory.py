@@ -1,9 +1,9 @@
 """Session-scoped conversation memory backed by SQLite."""
 
 import sqlite3
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from collections.abc import Iterator
 
 
 class SQLiteConversationMemory:
