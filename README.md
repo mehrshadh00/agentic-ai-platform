@@ -52,6 +52,23 @@ uvicorn agentic_platform.api:app --reload
 
 Open `http://127.0.0.1:8000/docs`.
 
+## Docker deployment
+
+Docker Compose runs the API as a non-root user and persists SQLite/Chroma data in a named volume. Copy `.env.example` to `.env`, set a long random `AGENT_API_KEY`, then run:
+
+```bash
+docker compose up --build -d
+docker compose logs -f agentic-api
+```
+
+The API listens on `http://localhost:8000`; `/health` is intentionally public for container health checks. All task, trace, and session-memory endpoints require `X-API-Key` when `AGENT_API_KEY` is configured. Include the header in API requests:
+
+```bash
+curl http://localhost:8000/tasks -H "X-API-Key: $AGENT_API_KEY" -H "Content-Type: application/json" -d '{"task":"Calculate 19 * 23"}'
+```
+
+For local development, an unset API key leaves authentication disabled. **Do not expose the service publicly without setting `AGENT_API_KEY`.** Rate limiting is per client IP and process; it suits a single instance, not multi-worker or distributed deployments. Use a trusted reverse proxy/API gateway for horizontally scaled deployments.
+
 ## Enable semantic memory
 
 Semantic memory is optional and disabled by default. It uses ChromaDB for persistent vector storage and SentenceTransformers for local embeddings.
@@ -92,6 +109,8 @@ Reuse the returned `session_id` in subsequent requests to maintain continuity.
 | `AGENT_PLANNER` | `rules` or `openai` | `rules` |
 | `AGENT_OPENAI_STRATEGY` | `tool_calling` or `json_plan` | `tool_calling` |
 | `OPENAI_API_KEY` | Enables the optional OpenAI planner | unset |
+| `AGENT_API_KEY` | Protects API endpoints through `X-API-Key`; unset disables auth for local development | unset |
+| `AGENT_RATE_LIMIT_PER_MINUTE` | Per-IP request limit per process | `60` |
 | `OPENAI_MODEL` | Model for planning | `gpt-4.1-mini` |
 | `AGENT_MAX_STEPS` | Maximum tool calls per task | `5` |
 | `AGENT_MAX_RETRIES` | Maximum retries after tool failures | `1` |
@@ -131,6 +150,9 @@ Task responses, ordered trace events, and short-term session history are persist
 - Vector retrieval and deletion are isolated by session ID.
 - Memory retention is bounded; TTL and explicit deletion are supported.
 - No secrets are returned in task results or traces.
+- Configured API keys use constant-time comparison and are never logged.
+- Task, trace, and memory endpoints are authenticated when a key is configured; health checks remain public.
+- Per-process rate limiting returns HTTP 429 and a `Retry-After` header.
 
 ## Development
 
@@ -153,7 +175,8 @@ ruff check .
 - [x] Multi-turn tool observations and model-directed replanning
 - [x] Optional ChromaDB semantic memory with session-isolated retrieval
 - [x] Memory deduplication, expiry, retention limits, and management endpoints
-- [ ] Authentication, rate limiting, and Docker deployment
+- [x] Optional API-key authentication and per-process rate limiting
+- [x] Non-root Docker image, Compose deployment, persistent volume, and health check
 
 ## License
 
