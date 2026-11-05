@@ -2,10 +2,13 @@ import logging
 import time
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 
 from agentic_platform.config import settings
 from agentic_platform.memory import SQLiteConversationMemory
+from agentic_platform.metrics import HTTP_REQUESTS, HTTP_REQUEST_DURATION, TASKS_TOTAL, TASK_DURATION, TOOL_CALLS_TOTAL, TOOL_DURATION
 from agentic_platform.models import TaskRequest, TaskResponse, TraceEvent
 from agentic_platform.runtime import AgentRuntime
 from agentic_platform.security import FixedWindowRateLimiter, verify_api_key
@@ -71,11 +74,21 @@ async def request_logging(request: Request, call_next):
     started = time.perf_counter()
     response = await call_next(request)
     elapsed_ms = (time.perf_counter() - started) * 1000
+    route = request.scope.get("route")
+    route_path = getattr(route, "path", request.url.path)
+    HTTP_REQUESTS.labels(request.method, route_path, str(response.status_code)).inc()
+    HTTP_REQUEST_DURATION.labels(request.method, route_path).observe(elapsed_ms / 1000)
     logger.info(
-        "request method=%s path=%s status=%s duration_ms=%.2f",
-        request.method, request.url.path, response.status_code, elapsed_ms,
+        "request method=%s route=%s status=%s duration_ms=%.2f",
+        request.method, route_path, response.status_code, elapsed_ms,
     )
     return response
+
+
+@app.get("/metrics", dependencies=[Depends(secure_api_access)])
+def metrics():
+    """Prometheus scrape endpoint protected by the API key when configured."""
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/health")
@@ -119,7 +132,18 @@ def create_task(request: TaskRequest) -> TaskResponse:
                 + "\n\n".join(context_parts)
                 + f"\n\nCurrent request: {request.task}"
             )
+        task_started = time.perf_counter()
         response = runtime.run(task).model_copy(update={"session_id": session_id})
+        TASKS_TOTAL.labels(response.status).inc()
+        TASK_DURATION.labels(response.status).observe(time.perf_counter() - task_started)
+        for event in response.trace:
+            if event.event in {"tool.completed", "tool.failed"}:
+                tool_name = str(event.details.get("tool", "unknown"))
+                outcome = "success" if event.event == "tool.completed" else "error"
+                TOOL_CALLS_TOTAL.labels(tool_name, outcome).inc()
+                duration_ms = event.details.get("duration_ms")
+                if isinstance(duration_ms, (int, float)):
+                    TOOL_DURATION.labels(tool_name).observe(float(duration_ms) / 1000)
         store.save_response(response)
         memory.add_turn(session_id, request.task, response.answer)
         if semantic_memory is not None:
