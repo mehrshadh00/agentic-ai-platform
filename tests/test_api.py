@@ -33,3 +33,20 @@ def test_task_endpoint_returns_execution_report():
 def test_unknown_task_returns_404():
     assert client.get("/tasks/not-a-real-task").status_code == 404
     assert client.get("/tasks/not-a-real-task/trace").status_code == 404
+
+
+def test_task_session_persists_conversation_memory():
+    response = client.post(
+        "/tasks",
+        json={"task": "Calculate 19 * 23", "session_id": "memory-test-session"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["session_id"] == "memory-test-session"
+
+    history = client.get("/sessions/memory-test-session/memory")
+    assert history.status_code == 200
+    messages = history.json()["messages"]
+    assert messages[0] == {"role": "user", "content": "Calculate 19 * 23"}
+    assert messages[1]["role"] == "assistant"
+    assert "437" in messages[1]["content"]
