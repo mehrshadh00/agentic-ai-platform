@@ -149,20 +149,6 @@ class GraphAgentRuntime:
 
         if result.success:
             final_results.append(result)
-        if call.tool_call_id:
-            observation = (
-                json.dumps(result.output, ensure_ascii=False, default=str)
-                if result.success
-                else json.dumps({"error": result.error}, ensure_ascii=False)
-            )
-            history.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": call.tool_call_id,
-                    "content": observation,
-                }
-            )
-
         if result.success:
             return {
                 "tool_results": results,
@@ -195,6 +181,19 @@ class GraphAgentRuntime:
                 "trace": trace,
             }
 
+        if call.tool_call_id:
+            observation = (
+                json.dumps(result.output, ensure_ascii=False, default=str)
+                if result.success
+                else json.dumps({"error": result.error}, ensure_ascii=False)
+            )
+            history.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": call.tool_call_id,
+                    "content": observation,
+                }
+            )
         final_results.append(result)
         return {
             "tool_results": results,
