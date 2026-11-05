@@ -40,17 +40,38 @@ def test_unknown_task_returns_404():
 
 
 def test_task_session_persists_conversation_memory():
+    session_id = "memory-test-session"
     response = client.post(
         "/tasks",
-        json={"task": "Calculate 19 * 23", "session_id": "memory-test-session"},
+        json={"task": "Calculate 19 * 23", "session_id": session_id},
     )
     assert response.status_code == 200
     payload = response.json()
-    assert payload["session_id"] == "memory-test-session"
+    assert payload["session_id"] == session_id
 
-    history = client.get("/sessions/memory-test-session/memory")
+    history = client.get(f"/sessions/{session_id}/memory")
     assert history.status_code == 200
     messages = history.json()["messages"]
-    assert messages[0] == {"role": "user", "content": "Calculate 19 * 23"}
-    assert messages[1]["role"] == "assistant"
-    assert "437" in messages[1]["content"]
+    assert messages[-2] == {"role": "user", "content": "Calculate 19 * 23"}
+    assert messages[-1]["role"] == "assistant"
+    assert "437" in messages[-1]["content"]
+
+
+def test_clear_session_memory_endpoint():
+    session_id = "memory-cleanup-test"
+    response = client.post(
+        "/tasks",
+        json={"task": "Calculate 19 * 23", "session_id": session_id},
+    )
+    assert response.status_code == 200
+
+    cleared = client.delete(f"/sessions/{session_id}/memory")
+    assert cleared.status_code == 200
+    assert cleared.json()["deleted_short_term_messages"] == 2
+    assert cleared.json()["semantic_memory_cleared"] is False
+    assert client.get(f"/sessions/{session_id}/memory").json()["messages"] == []
+
+
+def test_semantic_memory_management_requires_feature_flag():
+    response = client.get("/sessions/test-session/semantic-memory")
+    assert response.status_code == 503
