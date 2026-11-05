@@ -79,6 +79,20 @@ class ToolRegistry:
             for tool in self._tools.values()
         ]
 
+    def openai_tools(self) -> list[dict[str, Any]]:
+        """Export the allow-listed registry as OpenAI Chat Completions tools."""
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.input_model.model_json_schema(),
+                },
+            }
+            for tool in self._tools.values()
+        ]
+
 
 _ALLOWED_BINOPS: dict[type[ast.operator], Callable[[Any, Any], Any]] = {
     ast.Add: operator.add,
