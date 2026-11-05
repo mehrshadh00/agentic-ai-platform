@@ -12,6 +12,7 @@ This is not a chat UI with tools bolted on. It is an agent runtime with explicit
 - native OpenAI function schemas generated from Pydantic models;
 - bounded multi-turn planning, tool steps, retries, and execution time;
 - structured traces and persistent task history;
+- Prometheus request, task, tool, latency, and LLM token metrics;
 - short-term SQLite history and optional ChromaDB semantic memory;
 - memory deduplication, expiry, importance ranking, and retention caps;
 - deterministic tests that do not require network access or an LLM.
@@ -68,6 +69,12 @@ curl http://localhost:8000/tasks -H "X-API-Key: $AGENT_API_KEY" -H "Content-Type
 ```
 
 For local development, an unset API key leaves authentication disabled. **Do not expose the service publicly without setting `AGENT_API_KEY`.** Rate limiting is per client IP and process; it suits a single instance, not multi-worker or distributed deployments. Use a trusted reverse proxy/API gateway for horizontally scaled deployments.
+
+## Observability and metrics
+
+The authenticated `GET /metrics` endpoint exposes Prometheus metrics. Configure Prometheus to scrape `agentic-api:8000/metrics` from a trusted network and send the same `X-API-Key` header. Metrics include HTTP request counts/latency, task outcomes/runtime, tool outcomes/runtime, and OpenAI prompt/completion/total tokens by model. Request logs include method, route template, status, and duration; request bodies and credentials are never logged. Token counts are recorded when the OpenAI API returns usage data. Cost is not estimated because model prices change and are not embedded in the application.
+
+A sample scrape configuration is available at `monitoring/prometheus.yml`. Restrict Prometheus and Grafana to a trusted network before exposing monitoring interfaces.
 
 ## Enable semantic memory
 
@@ -177,6 +184,7 @@ ruff check .
 - [x] Memory deduplication, expiry, retention limits, and management endpoints
 - [x] Optional API-key authentication and per-process rate limiting
 - [x] Non-root Docker image, Compose deployment, persistent volume, and health check
+- [x] Prometheus metrics for HTTP, agent tasks, tools, latency, and LLM token usage
 
 ## License
 
