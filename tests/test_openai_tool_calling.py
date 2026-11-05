@@ -24,8 +24,9 @@ class FakeClient:
         self.chat = SimpleNamespace(completions=self.completions)
 
 
-def make_tool_call(name="calculator", arguments='{"expression":"19 * 23"}'):
+def make_tool_call(name="calculator", arguments='{"expression":"19 * 23"}', call_id="call-123"):
     return SimpleNamespace(
+        id=call_id,
         function=SimpleNamespace(name=name, arguments=arguments)
     )
 
@@ -44,7 +45,7 @@ def test_native_tool_calling_uses_registry_schemas_and_parses_calls():
     plan = planner.create_plan("Calculate 19 * 23")
 
     request = client.completions.request
-    assert request["tool_choice"] == "required"
+    assert request["tool_choice"] == "auto"
     assert request["parallel_tool_calls"] is False
     assert {item["function"]["name"] for item in request["tools"]} == {
         "calculator",
@@ -85,11 +86,13 @@ def test_native_tool_calling_rejects_invalid_json_arguments():
         planner.create_plan("calculate something")
 
 
-def test_native_tool_calling_requires_a_tool_call():
-    client = FakeClient(SimpleNamespace(tool_calls=None))
+def test_native_tool_calling_accepts_final_answer_without_tool_calls():
+    client = FakeClient(SimpleNamespace(tool_calls=None, content="The task is complete."))
     planner = OpenAIToolCallingPlanner(
         api_key="test-key", model="test-model", client=client
     )
 
-    with pytest.raises(RuntimeError, match="did not return"):
-        planner.create_plan("calculate something")
+    plan = planner.create_plan("calculate something")
+
+    assert plan.steps == []
+    assert plan.final_answer == "The task is complete."
