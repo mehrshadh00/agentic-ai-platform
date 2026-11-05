@@ -1,9 +1,9 @@
 """SQLite persistence for task responses and their execution traces."""
 
 import sqlite3
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
 
 from agentic_platform.models import TaskResponse, TraceEvent
 
